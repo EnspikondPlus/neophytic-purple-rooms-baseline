@@ -13,7 +13,7 @@ from a2a.utils import (
     get_message_text,
 )
 
-from agent import BaselinePurpleAgent
+from .agent import BaselinePurpleAgent
 
 TERMINAL_STATES = {
     TaskState.completed,
