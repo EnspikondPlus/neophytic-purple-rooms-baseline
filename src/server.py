@@ -10,12 +10,11 @@ from a2a.types import (
     AgentSkill,
 )
 
-from executor import PurpleExecutor
-
+from executor import Executor
 
 def main():
     parser = argparse.ArgumentParser(description="Run the purple solver agent.")
-    parser.add_argument("--host", type=str, default="127.0.0.1", help="Host to bind the server")
+    parser.add_argument("--host", type=str, default="0.0.0.0", help="Host to bind the server")
     parser.add_argument("--port", type=int, default=8000, help="Port to bind the server")
     parser.add_argument("--card-url", type=str, help="URL to advertise in the agent card")
     args = parser.parse_args()
@@ -25,9 +24,7 @@ def main():
         name="Rooms Puzzle Solver",
         description="Solves Rooms navigation puzzles",
         tags=["solver", "navigation", "planning"],
-        examples=[
-            "Solve the rooms puzzle"
-        ]
+        examples=["Solve the rooms puzzle"]
     )
 
     agent_card = AgentCard(
@@ -42,15 +39,16 @@ def main():
     )
 
     request_handler = DefaultRequestHandler(
-        agent_executor=PurpleExecutor(),
+        agent_executor=Executor(),
         task_store=InMemoryTaskStore(),
     )
     server = A2AStarletteApplication(
         agent_card=agent_card,
         http_handler=request_handler,
     )
+    
+    print(f"🟣 Purple Agent running on {args.host}:{args.port}")
     uvicorn.run(server.build(), host=args.host, port=args.port)
-
 
 if __name__ == '__main__':
     main()

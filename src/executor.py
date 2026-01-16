@@ -15,7 +15,6 @@ from a2a.utils import (
 
 from agent import BaselinePurpleAgent
 
-
 TERMINAL_STATES = {
     TaskState.completed,
     TaskState.canceled,
@@ -23,9 +22,9 @@ TERMINAL_STATES = {
     TaskState.rejected
 }
 
-
-class PurpleExecutor(AgentExecutor):
+class Executor(AgentExecutor):
     def __init__(self):
+        # Maps context_id -> Agent Instance
         self.agents: dict[str, BaselinePurpleAgent] = {}
 
     async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
@@ -42,22 +41,35 @@ class PurpleExecutor(AgentExecutor):
             await event_queue.enqueue_event(task)
 
         context_id = task.context_id
+        
+        # State Management:
+        # If context_id is missing, generate one, but for this benchmark 
+        # the Green Agent usually sends one to maintain the session.
+        if not context_id:
+            context_id = "default_session"
+
         agent = self.agents.get(context_id)
         if not agent:
+            print(f"🟣 Creating new Purple Agent for context: {context_id}")
             agent = BaselinePurpleAgent()
             self.agents[context_id] = agent
+        
+        # Check if the prompt indicates a reset (optional safety)
+        prompt = get_message_text(msg)
+        if "Step 0" in prompt:
+            # Reset the agent's internal memory
+            agent.reset()
 
         updater = TaskUpdater(event_queue, task.id, context_id)
-
         await updater.start_work()
+
         try:
-            # Get prompt from green agent
-            prompt = get_message_text(msg)
-            
             # Select action
             action = agent.select_action(prompt)
             response_text = agent.format_action(action)
             
+            print(f"🟣 Replying: {response_text}")
+
             # Return action to green agent
             await updater.complete(new_agent_text_message(response_text, context_id=context_id, task_id=task.id))
             
@@ -66,4 +78,4 @@ class PurpleExecutor(AgentExecutor):
             await updater.failed(new_agent_text_message(f"Agent error: {e}", context_id=context_id, task_id=task.id))
 
     async def cancel(self, context: RequestContext, event_queue: EventQueue) -> None:
-        pass  # Not implemented
+        pass

@@ -1,14 +1,13 @@
+# tests/conftest.py
 import httpx
 import pytest
-
 
 def pytest_addoption(parser):
     parser.addoption(
         "--agent-url",
-        default="http://localhost:9009",
-        help="Agent URL (default: http://localhost:9009)",
+        default="http://localhost:8000",
+        help="Agent URL (default: http://localhost:8000)",
     )
-
 
 @pytest.fixture(scope="session")
 def agent(request):
