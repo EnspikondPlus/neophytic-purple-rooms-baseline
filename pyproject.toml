@@ -9,7 +9,6 @@ dependencies = [
     "uvicorn>=0.38.0",
 ]
 
-# --- ADD THIS SECTION ---
 [project.optional-dependencies]
 test = [
     "pytest>=8.0.0",
@@ -17,11 +16,16 @@ test = [
     "httpx>=0.28.1",
 ]
 
+[project.scripts]
+purple-server = "src.server:main"
+
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
-# --- ADD THIS SECTION ---
+[tool.setuptools]
+packages = ["src"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]

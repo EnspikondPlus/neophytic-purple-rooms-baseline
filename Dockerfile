@@ -11,6 +11,7 @@ RUN \
     --mount=type=cache,target=/home/agent/.cache/uv,uid=1000 \
     uv sync --locked
 
-ENTRYPOINT ["uv", "run"]
-CMD ["src/server.py", "--host", "0.0.0.0", "--port", "8000"]
+ENTRYPOINT ["uv", "run", "purple-server"]
+
+CMD ["--host", "0.0.0.0", "--port", "8000"]
 EXPOSE 8000
