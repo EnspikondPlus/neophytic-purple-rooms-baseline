@@ -6,15 +6,11 @@ on:
     branches:
       - main
     tags:
-      - 'v*'  # Trigger on version tags like v1.0.0, v1.1.0
+      - 'v*'
 
 jobs:
   test-and-publish:
     runs-on: ubuntu-latest
-
-    # These permissions are required for the workflow to:
-    # - Read repository contents (checkout code)
-    # - Write to GitHub Container Registry (push Docker images)
     permissions:
       contents: read
       packages: write
@@ -23,10 +19,22 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+
+      # 1. Run Unit Tests (Fast, no container needed)
+      # This checks your logic files (executor.py, etc.)
+      - name: Install dependencies and run unit tests
+        run: |
+          uv sync --extra test
+          uv run pytest -v
+
+      # 2. Prepare Docker Metadata (Fixes casing automatically)
       - name: Extract metadata for Docker
         id: meta
         uses: docker/metadata-action@v5
         with:
+          # This action automatically lowercases the repo name
           images: ghcr.io/${{ github.repository }}
           tags: |
             type=ref,event=pr
@@ -34,6 +42,7 @@ jobs:
             type=semver,pattern={{major}}
             type=raw,value=latest,enable={{is_default_branch}}
 
+      # 3. Build and Load (Don't push yet)
       - name: Build Docker image
         uses: docker/build-push-action@v5
         with:
@@ -44,27 +53,29 @@ jobs:
           load: true
           platforms: linux/amd64
 
-      - name: Start agent container
+      # 4. Smoke Test: Start Container & Verify it Responds
+      # CHANGED: Port 9009 -> 8000 (Standard Purple Port)
+      - name: Start agent container for smoke test
         env:
-            SECRETS_JSON: ${{ toJson(secrets) }}
+          SECRETS_JSON: ${{ toJson(secrets) }}
         run: |
           echo "$SECRETS_JSON" | jq -r 'to_entries[] | "\(.key)=\(.value)"' > .env
-          docker run -d -p 9009:9009 --name agent-container --env-file .env $(echo "${{ steps.meta.outputs.tags }}" | head -n1) --host 0.0.0.0 --port 9009
-          timeout 30 bash -c 'until curl -sf http://localhost:9009/.well-known/agent-card.json > /dev/null; do sleep 1; done'
+          
+          # Run on standard Purple port 8000
+          docker run -d \
+            -p 8000:8000 \
+            --name agent-container \
+            --env-file .env \
+            $(echo "${{ steps.meta.outputs.tags }}" | head -n1) \
+            --host 0.0.0.0 --port 8000
+          
+          echo "Waiting for agent to start..."
+          timeout 30 bash -c 'until curl -sf http://localhost:8000/.well-known/agent-card.json > /dev/null; do sleep 1; done'
+          echo "Agent is healthy!"
 
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v4
-
-      - name: Install test dependencies
-        run: uv sync --extra test
-
-      - name: Run tests
-        run: uv run pytest -v --agent-url http://localhost:9009
-
-      - name: Stop container and show logs
+      - name: Stop container
         if: always()
         run: |
-          echo "=== Agent Container Logs ==="
           docker logs agent-container || true
           docker stop agent-container || true
 
@@ -76,8 +87,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # 5. Push (Only if tests passed)
       - name: Push Docker image
         if: success() && github.event_name != 'pull_request'
+        # Uses the specific lowercase env var syntax for bash
         run: docker push --all-tags ghcr.io/${GITHUB_REPOSITORY,,}
 
       - name: Output image digest
@@ -85,4 +98,5 @@ jobs:
         run: |
           echo "## Docker Image Published :rocket:" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Tags:** ${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Tags:**" >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
